@@ -10,7 +10,7 @@ const ctx = () => SillyTavern.getContext();
 
 let ui = null;
 let last = null;                 // { staticText, tailText }
-const recentFocus = [];          // memória curta para o Diretor não repetir foco
+const recentFocus = [];          // memória curta para não repetir foco
 const recentHooks = [];
 const recentEnds = [];
 
