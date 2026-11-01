@@ -1,13 +1,19 @@
-import { estimateInjectionCost } from './engine.js';
-
-export function recordRun(s, r) {
+export function recordRun(s, res) {
     const st = s.stats;
-    st.runs += 1;
-    st.injTokens += r.tokens;
-    st.slopFlagged += r.analysis?.slop?.length ?? 0;
-    st.last = { tokens: r.tokens, focus: r.focusKeys, slop: r.analysis?.slop ?? [], at: Date.now() };
+    st.runs = (st.runs || 0) + 1;
+    st.injTokens = (st.injTokens || 0) + (res.tokens || 0);
+    st.last = new Date().toISOString();
 }
 
-export const resetStats = (s) => { s.stats = { runs: 0, injTokens: 0, slopFlagged: 0, last: null }; };
+export function resetStats(s) {
+    s.stats = { runs: 0, injTokens: 0, slopFlagged: 0, last: null };
+}
 
-export const summarize = (s, info) => ({ ...s.stats, cost: estimateInjectionCost(s, info) });
+export function summarize(s, info) {
+    return {
+        runs: s.stats.runs || 0,
+        injTokens: s.stats.injTokens || 0,
+        slopFlagged: s.stats.slopFlagged || 0,
+        last: s.stats.last || null
+    };
+}
