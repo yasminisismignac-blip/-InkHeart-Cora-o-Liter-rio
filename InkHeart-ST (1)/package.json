@@ -1,7 +1,7 @@
 {
     "name": "sillytavern-inkheart",
-    "version": "1.1.0",
-    "description": "Coração literário para o SillyTavern: injeta estilo, anti-clichê adaptativo e âncora de personagem. Parceira do TokenSaver.",
+    "version": "2.0.0",
+    "description": "InkHeart cirúrgico: escrita enxuta, subtexto e diálogos naturais para SillyTavern.",
     "type": "module",
     "scripts": {
         "test": "node --test test/*.test.js"
