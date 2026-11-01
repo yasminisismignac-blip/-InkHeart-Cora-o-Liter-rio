@@ -10,7 +10,9 @@ const ctx = () => SillyTavern.getContext();
 
 let ui = null;
 let last = null;                 // { staticText, tailText }
-const recentFocus = [];          // memória curta para o Diretor não repetir foco
+const recentFocus = [];          // memória curta para não repetir foco
+const recentHooks = [];
+const recentEnds = [];
 
 function getSettings() {
     const { extensionSettings } = ctx();
@@ -54,7 +56,12 @@ function getInfo(s) {
         const raw = card?.personality || card?.data?.personality || '';
         if (raw) anchorAuto = clip(subst(raw), 350);
     }
-    return { charName: c.name2, userName: c.name1, anchorAuto, subst };
+    return { charName: c.name2, userName: c.name1, anchorAuto, subst, turn: Array.isArray(c.chat) ? c.chat.length : undefined };
+}
+
+function remember(list, items, max) {
+    list.push(...items);
+    list.splice(0, Math.max(0, list.length - max));
 }
 
 function onPromptReady(data) {
@@ -62,12 +69,13 @@ function onPromptReady(data) {
         const s = getSettings();
         if (!data || !Array.isArray(data.chat) || !shouldRun(s)) return;
 
-        const res = applyInkHeart(data.chat, s, getInfo(s), { recent: recentFocus });
+        const res = applyInkHeart(data.chat, s, getInfo(s), { recent: recentFocus, recentHooks, recentEnds });
         data.chat.splice(0, data.chat.length, ...res.messages);
 
         if (!data.dryRun) {
-            recentFocus.push(...res.focusKeys);
-            recentFocus.splice(0, Math.max(0, recentFocus.length - 4));
+            remember(recentFocus, res.focusKeys, 4);
+            remember(recentHooks, res.plan.hookKeys, 4);
+            remember(recentEnds, res.plan.endingKey ? [res.plan.endingKey] : [], 2);
             last = { staticText: res.staticText, tailText: res.tailText };
             recordRun(s, res);
             save();
