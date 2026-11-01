@@ -1,5 +1,4 @@
-// Motor PURO do InkHeart (sem DOM / SillyTavern): monta blocos, detecta clichês e injeta no prompt.
-
+// Motor PURO do InkHeart (sem DOM / SillyTavern): monta blocos enxutos e injeta no prompt.
 import { ENDINGS, FOCUS, HOOKS, PROFILES, RHYTHM, RHYTHM_CYCLE, SLOP } from './library.js';
 
 export const textOf = (content) => {
@@ -37,8 +36,8 @@ export function scanSlop(text, matchers) {
 
 const words = (t) => t.toLowerCase().match(/[\p{L}\p{N}']+/gu) || [];
 
-/** Sequências de n palavras que se repetem em 2+ mensagens. */
-export function findRepeatedNgrams(texts, n = 4, max = 3) {
+/** Sequências de n palavras que se repetem em 2+ mensagens (máximo 2 para não poluir). */
+export function findRepeatedNgrams(texts, n = 4, max = 2) {
     const counts = new Map();
     for (const t of texts) {
         const w = words(t);
@@ -53,9 +52,6 @@ export function findRepeatedNgrams(texts, n = 4, max = 3) {
     const rep = [...counts].filter(([, c]) => c >= 2).sort((a, b) => b[1] - a[1]).map(([g]) => g);
     const chosen = [];
     for (const g of rep) {
-        const head = g.split(' ').slice(0, 3).join(' ');
-        const tail = g.split(' ').slice(-3).join(' ');
-        if (chosen.some((c) => c.includes(head) || c.includes(tail) || g.includes(c.split(' ').slice(0, 3).join(' ')))) continue;
         chosen.push(g);
         if (chosen.length >= max) break;
     }
@@ -73,11 +69,11 @@ export function analyzeHistory(assistantTexts, matchers, minChars = 280) {
     if (!last.length) return out;
     const hit = new Set();
     for (const t of last) scanSlop(t, matchers).forEach((l) => hit.add(l));
-    out.slop = [...hit].slice(0, 8);
+    out.slop = [...hit].slice(0, 3); // só os 3 piores
     out.passive = PASSIVE.test(last.at(-1).slice(-220));
     if (last.length >= 2) out.thin = last.slice(-2).every((x) => x.length < minChars);
     if (last.length >= 2) {
-        out.repeated = findRepeatedNgrams(last, 4, 3);
+        out.repeated = findRepeatedNgrams(last, 4, 2);
         const [a, b] = [opening(last.at(-2)), opening(last.at(-1))];
         if (a && a.toLowerCase() === b.toLowerCase()) out.opening = b;
         if (endsWithQuestion(last.at(-2)) && endsWithQuestion(last.at(-1))) out.noQuestion = true;
@@ -85,7 +81,7 @@ export function analyzeHistory(assistantTexts, matchers, minChars = 280) {
     return out;
 }
 
-// ───────── Diretor ─────────
+// ───────── Diretor (enxuto: 1 foco por turno) ─────────
 export function pickFocus(rng, count, recent = [], pool0 = Object.keys(FOCUS)) {
     const keys = pool0;
     let pool = keys.filter((k) => !recent.includes(k));
@@ -105,17 +101,15 @@ export const TAIL_HEADER = '[Turn Focus]';
 export function buildStaticBlock(s) {
     const lines = [STATIC_HEADER];
     if (s.proseBible) {
-        lines.push((PROFILES[s.profile] ?? PROFILES.literario).text);
+        lines.push((PROFILES[s.profile] ?? PROFILES.natural).text);
         lines.push(
-            'Craft rules:',
-            '- Show emotion through specific behavior, perception and subtext; do not name emotions outright.',
-            '- Prefer concrete, specific details over generic adjectives. One fresh image beats three stock ones.',
-            "- Never write {{user}}'s dialogue, actions, thoughts or feelings. End on an open beat that invites {{user}} to respond.",
-            '- No summaries, morals or reflective wrap-up lines at the end. Stay in character and in scene; no meta commentary.',
+            '- Nunca escreva diálogos, ações, pensamentos ou sentimentos de {{user}}.',
+            '- Termine sempre em um ponto aberto que convoque {{user}} a agir.',
+            '- Não resuma, não moralize, não faça comentários meta. Fique na cena e no personagem.'
         );
     }
     if (s.initiative) {
-        lines.push('Initiative: characters have their own wants and act on them. Never just react or hand the turn back passively; push something forward each reply.');
+        lines.push('- Iniciativa: o personagem age por vontade própria. Nunca devolva a vez de forma passiva.');
     }
     if (s.antiSlop && s.coreBanCount > 0) {
         const custom = buildMatchers(s.langs, s.customBan).filter((x) => x.custom).map((x) => x.label);
@@ -127,48 +121,51 @@ export function buildStaticBlock(s) {
             for (let i = 0; i < Math.max(en.length, pt.length); i++) { if (pt[i]) base.push(pt[i]); if (en[i]) base.push(en[i]); }
         } else base = pool(s.langs);
         const labels = [...custom, ...base.slice(0, s.coreBanCount)];
-        if (labels.length) lines.push(`Avoid stock phrasing and its variants, e.g.: ${labels.map((l) => `"${l}"`).join(', ')}. Find fresh, specific wording instead.`);
+        if (labels.length) lines.push(`- Evite essas frases prontas: ${labels.map((l) => `"${l}"`).join(', ')}. Diga de outra forma.`);
     }
     const lang = String(s.outputLang || '').trim();
-    lines.push(lang ? `Write in ${lang}.` : 'Write in the same language as the ongoing conversation.');
-    if (s.targetWords > 0) lines.push(`Aim for roughly ${s.targetWords} words per reply.`);
+    lines.push(lang ? `Escreva em ${lang}.` : 'Escreva no idioma da conversa.');
+    if (s.targetWords > 0) lines.push(`Meta aproximada: ${s.targetWords} palavras por resposta.`);
     if (String(s.customStyle || '').trim()) lines.push(String(s.customStyle).trim());
-    return lines.length > 2 || s.proseBible ? lines.join('\n') : '';
+    return lines.length > 1 ? lines.join('\n') : '';
 }
 
 export function buildTailBlock(s, info, analysis, plan) {
     const lines = [TAIL_HEADER];
     const items = [];
-    (plan.focusKeys || []).forEach((k) => items.push(FOCUS[k]));
-    (plan.hookKeys || []).forEach((k) => items.push(`Hook: ${HOOKS[k]}`));
-    if (plan.endingKey) items.push(`Ending: ${ENDINGS[plan.endingKey]}`);
-    if (plan.beat) items.push(RHYTHM[plan.beat]);
-    if (plan.callback) items.push('Callback: quietly pay off or deepen an earlier unresolved detail (a promise, secret, object, question).');
-    if (items.length) lines.push('For this reply:', ...items.map((x) => `- ${x}`));
 
-    const threads = String(s.threads || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 5);
-    if (threads.length) lines.push(`Open threads you may pick up when it fits: ${threads.join('; ')}.`);
+    // Máximo: 1 foco, 1 gancho, 1 final por turno.
+    if (plan.focusKeys?.[0]) items.push(`Foco: ${FOCUS[plan.focusKeys[0]]}`);
+    if (plan.hookKeys?.[0]) items.push(`Gancho: ${HOOKS[plan.hookKeys[0]]}`);
+    if (plan.endingKey) items.push(`Final: ${ENDINGS[plan.endingKey]}`);
+    if (plan.beat) items.push(`Ritmo: ${RHYTHM[plan.beat]}.`);
 
     if (s.radarEnabled && analysis) {
-        if (analysis.slop.length) lines.push(`Fresh-prose alert: your recent replies used ${analysis.slop.map((x) => `"${x}"`).join(', ')}. Do not use these again; say it a new way.`);
-        if (analysis.repeated.length) lines.push(`You keep repeating: ${analysis.repeated.map((x) => `"${x}"`).join(', ')}. Avoid these exact phrasings.`);
-        if (analysis.opening) lines.push(`Do not begin this reply with "${analysis.opening}…"; open differently.`);
-        if (analysis.noQuestion) lines.push('Do not end this reply with a question.');
-        if (analysis.passive && s.initiative) lines.push('Your last reply handed the turn back passively; make a move of your own.');
-        if (analysis.thin) lines.push('Your last replies were thin: add a concrete action, a sensory detail and a move of your own.');
+        if (analysis.slop.length) items.push(`Não repita: ${analysis.slop.map((x) => `"${x}"`).join(', ')}.`);
+        if (analysis.repeated.length) items.push(`Evite essa repetição: "${analysis.repeated[0]}".`);
+        if (analysis.noQuestion) items.push('Não termine com pergunta.');
+        if (analysis.passive && s.initiative) items.push('Faça um movimento próprio; não devolva a vez passivamente.');
     }
-    if (s.checklist) lines.push('Silently check: specific details? emotions shown, not stated? room for {{user}} to act?');
+
+    const threads = String(s.threads || '').split('\n').map((x) => x.trim()).filter(Boolean).slice(0, 3);
+    if (threads.length) items.push(`Fios soltos disponíveis: ${threads.join('; ')}.`);
+
+    if (items.length) lines.push(items.map((x) => `- ${x}`).join('\n'));
+
     if (s.anchor) {
         const parts = [];
         const clean = (x) => String(x).trim().replace(/[.\s]+$/, '');
         if (s.anchorAuto && info?.anchorAuto) parts.push(clean(info.anchorAuto));
         if (String(s.anchorText || '').trim()) parts.push(clean(s.anchorText));
-        lines.push(`[Character Anchor]\nStay true to {{char}}${parts.length ? `: ${parts.filter(Boolean).join('. ')}` : ''}. Keep their flaws and emotional depth; do not turn generic or overly nice unless that is who they are.`);
+        if (parts.length) {
+            lines.push(`[Âncora]\nMantenha {{char}} fiel a: ${parts.join('. ')}. Sem amolecer nem virar genérico.`);
+        }
     }
+
     return lines.length > 1 ? lines.join('\n') : '';
 }
 
-/** Sorteia o plano do turno: foco, gancho(s), tipo de final, batida de ritmo e retomada. */
+/** Sorteia o plano do turno: 1 foco, 1 gancho, 1 final. Sem checklist. */
 export function buildPlan(s, rng, deps = {}, turn = 0) {
     return {
         focusKeys: s.director ? pickFocus(rng, s.focusCount, deps.recent ?? []) : [],
@@ -195,7 +192,7 @@ export function injectBlocks(chat, staticText, tailText, o) {
     if (tailText) {
         const depth = Math.max(0, o.tailDepth | 0);
         let idx = out.length - depth;
-        if (depth === 0 && out.length && out.at(-1).role === 'assistant') idx = out.length - 1; // respeita prefill
+        if (depth === 0 && out.length && out.at(-1).role === 'assistant') idx = out.length - 1;
         out.splice(Math.max(0, idx), 0, { role: o.tailRole === 'user' ? 'user' : 'system', content: tailText });
     }
     return out;
@@ -229,7 +226,6 @@ export function applyInkHeart(chat, s, info = {}, deps = {}) {
     };
 }
 
-/** Custo estimado (tokens/turno, pior caso) — para mostrar na interface. */
 export function estimateInjectionCost(s, info = {}) {
     const plan = {
         focusKeys: s.director ? Object.keys(FOCUS).slice(0, s.focusCount) : [],
