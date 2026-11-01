@@ -1,12 +1,12 @@
 export const MODULE = 'inkheart';
 
 /** Chaves controladas pelos níveis de intensidade. */
-export const STRENGTH_KEYS = ['focusCount', 'coreBanCount', 'radarEnabled', 'checklist'];
+export const STRENGTH_KEYS = ['focusCount', 'coreBanCount', 'radarEnabled', 'checklist', 'hookCount'];
 
 export const STRENGTH = {
-    sutil: { focusCount: 1, coreBanCount: 6, radarEnabled: true, checklist: false },
-    equilibrado: { focusCount: 2, coreBanCount: 10, radarEnabled: true, checklist: false },
-    intenso: { focusCount: 3, coreBanCount: 16, radarEnabled: true, checklist: true },
+    sutil: { focusCount: 1, coreBanCount: 4, radarEnabled: true, checklist: false, hookCount: 1 },
+    equilibrado: { focusCount: 1, coreBanCount: 6, radarEnabled: true, checklist: false, hookCount: 1 },
+    intenso: { focusCount: 2, coreBanCount: 10, radarEnabled: true, checklist: false, hookCount: 1 },
 };
 
 export const DEFAULTS = {
@@ -14,13 +14,13 @@ export const DEFAULTS = {
     onlyOpenRouter: true,
     onlyFreeModels: false,
 
-    strength: 'equilibrado',
-    ...STRENGTH.equilibrado,
+    strength: 'sutil',
+    ...STRENGTH.sutil,
 
-    profile: 'literario',
+    profile: 'natural',          // padrão mudou: natural, contido e direto
     langs: 'both',
     outputLang: '',
-    targetWords: 0,
+    targetWords: 0,              // desligado por padrão (não enche linguiça)
     customStyle: '',
 
     proseBible: true,
@@ -31,12 +31,19 @@ export const DEFAULTS = {
     anchorText: '',
     customBan: '',
 
+    initiative: true,
+    hooks: true,
+    hookEnding: true,
+    rhythm: false,               // desligado por padrão para não forçar batidas
+    callbackEvery: 0,            // desligado por padrão
+    threads: '',
+
     tailRole: 'system',
     tailDepth: 0,
 
-    samplerNudge: false,
-    freqPenalty: 0.2,
-    presPenalty: 0.1,
+    samplerNudge: false,         // desligado por padrão (sem penalidades forçadas)
+    freqPenalty: 0,
+    presPenalty: 0,
 
     charsPerToken: 3.6,
 
